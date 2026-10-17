@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zielona Fala – gra o sygnalizacji ruchu</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header id="top">
+  <div class="brand"><span class="logo"><i></i><i></i><i></i></span>Zielona Fala</div>
+  <nav class="modes">
+    <button id="btn-plan" class="mode active">Planowanie</button>
+    <button id="btn-sim" class="mode">Symulacja</button>
+  </nav>
+  <div class="mapctl">
+    <label>Mapa <input id="seed" type="text" maxlength="12" spellcheck="false" title="Numer mapy – ten sam numer daje tę samą mapę"></label>
+    <select id="size" title="Rozmiar mapy">
+      <option value="small">Mała</option>
+      <option value="medium">Średnia</option>
+      <option value="large">Duża</option>
+    </select>
+    <button id="btn-new">Losuj mapę</button>
+    <button id="btn-fit" title="Dopasuj widok do okna">Dopasuj</button>
+  </div>
+  <div id="reach" class="reach"></div>
+</header>
+
+<div id="main">
+  <div id="stage">
+    <canvas id="view"></canvas>
+    <div id="toast"></div>
+    <div class="help">Kółko myszy – zbliżenie · przeciąganie – przesuwanie widoku · PPM – zdejmij znak</div>
+  </div>
+
+  <aside id="side">
+    <section id="panel-plan">
+      <h2>Narzędzia</h2>
+      <div id="tools"></div>
+      <p id="tool-hint" class="hint"></p>
+      <button id="btn-clear" class="ghost">Wyczyść znaki i sygnalizację</button>
+    </section>
+
+    <section id="panel-sim" hidden>
+      <h2>Symulacja</h2>
+      <div class="row">
+        <button id="sim-play">Pauza</button>
+        <button id="sim-restart">Restart</button>
+      </div>
+      <div class="ctl">
+        <span>Prędkość</span>
+        <div class="seg" id="speed">
+          <button data-v="1" class="active">1×</button>
+          <button data-v="2">2×</button>
+          <button data-v="4">4×</button>
+          <button data-v="8">8×</button>
+        </div>
+      </div>
+      <label class="ctl">
+        <span>Natężenie ruchu: <b id="level-v">4</b></span>
+        <input type="range" id="level" min="1" max="10" step="1" value="4">
+      </label>
+      <label class="check"><input type="checkbox" id="by-speed"> Koloruj auta wg prędkości</label>
+      <div id="stats"></div>
+    </section>
+
+    <section id="panel-insp">
+      <h2>Skrzyżowanie</h2>
+      <div id="inspector"></div>
+    </section>
+  </aside>
+</div>
+
+<script src="js/util.js"></script>
+<script src="js/mapgen.js"></script>
+<script src="js/signs.js"></script>
+<script src="js/sim.js"></script>
+<script src="js/render.js"></script>
+<script src="js/ui.js"></script>
+</body>
+</html>
