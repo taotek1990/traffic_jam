@@ -20,6 +20,14 @@
   const COLORS = ['#e24a4a', '#3d7bd9', '#f0b429', '#4caf7a', '#f2f2f2', '#8e5bd1', '#e57c3a', '#2f3a4a', '#26a6b8', '#c4c9d0'];
   const K = (e, lane) => e.id * 4 + lane;
 
+  // rodzaje pojazdów: udział w ruchu, długość, mnożnik prędkości (f) i przyspieszenia (acc)
+  const VEHICLES = {
+    car: { share: 0.78, len: [15, 18], f: [0.88, 1.1], acc: 1 },
+    truck: { share: 0.13, len: [27, 32], f: [0.6, 0.72], acc: 0.55 },
+    moto: { share: 0.09, len: [8, 9], f: [1.25, 1.45], acc: 1.3 },
+  };
+  TJ.VEHICLES = VEHICLES;
+
   TJ.newRules = () => ({ signs: {}, noentry: {}, signals: {} });
 
   // czy manewr e1 -> nx.edge jest dozwolony przez znaki
@@ -313,7 +321,13 @@
       }
       const route = g.plan;
       const e = route[0];
-      const len = 15 + Math.floor(this.rnd() * 4);
+      let kind = 'car';
+      for (let r = this.rnd(), k = 0, names = Object.keys(VEHICLES); k < names.length; k++) {
+        r -= VEHICLES[names[k]].share;
+        if (r < 0) { kind = names[k]; break; }
+      }
+      const vt = VEHICLES[kind];
+      const len = vt.len[0] + Math.floor(this.rnd() * (vt.len[1] - vt.len[0] + 1));
       // wybór pasa wg manewru na pierwszym skrzyżowaniu (łuki pomijamy)
       let want = -1;
       let a = e, k = 1;
@@ -329,9 +343,10 @@
       }
       const arr = this.occ.get(K(e, lane));
       if (arr) for (const o of arr) if (o.x - o.c.len < len + 18) return false;
-      const f = 0.88 + this.rnd() * 0.22;
+      const f = vt.f[0] + this.rnd() * (vt.f[1] - vt.f[0]);
       const car = {
         id: this.nextId++, route, ri: 0, e, lane, s: len, v: Math.min(e.vmax * f * 0.7, 30), len, f,
+        kind, A: P.A * vt.acc,
         color: COLORS[Math.floor(this.rnd() * COLORS.length)],
         state: 0, u: 0, mv: null, granted: false, denied: false, hard: false, nextLane: null,
         wait: 0, stopT: 0, stillT: 0, acc: 0, t0: this.t, free: this.freeTime(route, f), done: false,
@@ -504,13 +519,13 @@
           if (sg < g) { g = sg; vl = 0; }
         }
         const v0 = this.desired(c);
-        let acc = P.A * (1 - Math.pow(c.v / v0, 4));
+        let acc = c.A * (1 - Math.pow(c.v / v0, 4));
         if (g < Infinity) {
           const dv = c.v - vl;
           const ss = P.S0 + Math.max(0, c.v * P.T + (c.v * dv) / (2 * Math.sqrt(P.A * P.B)));
           acc -= P.A * Math.pow(ss / Math.max(g, 0.5), 2);
         }
-        acc = Math.max(-P.BMAX, Math.min(P.A, acc));
+        acc = Math.max(-P.BMAX, Math.min(c.A, acc));
         let nv = Math.max(0, c.v + acc * h);
         let adv = (c.v + nv) * 0.5 * h;
         if (g < Infinity) {

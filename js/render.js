@@ -253,20 +253,52 @@
           const f = Math.min(1, c.v / vmax);
           ctx.fillStyle = `hsl(${Math.round(f * 125)}, 80%, 50%)`;
         } else ctx.fillStyle = c.color;
-        rrect(ctx, -L / 2, -4, L, 8, 2.4);
-        ctx.fill();
-        ctx.fillStyle = 'rgba(15,25,35,.78)';
-        ctx.fillRect(L * 0.08, -3.1, L * 0.2, 6.2);
-        ctx.fillRect(-L * 0.38, -3.1, L * 0.13, 6.2);
-        if (c.acc < -10 || (c.v < 1 && c.state === 0 && c.denied)) {
-          ctx.fillStyle = '#ff2d2d';
-          ctx.fillRect(-L / 2, -3.4, 1.6, 2);
-          ctx.fillRect(-L / 2, 1.4, 1.6, 2);
+        const braking = c.acc < -10 || (c.v < 1 && c.state === 0 && c.denied);
+        let hw = 4; // połowa szerokości
+        if (c.kind === 'moto') {
+          // motocykl: wąski korpus z kierowcą
+          hw = 2;
+          rrect(ctx, -L / 2, -1.6, L, 3.2, 1.6);
+          ctx.fill();
+          ctx.fillStyle = 'rgba(15,25,35,.85)';
+          ctx.beginPath();
+          ctx.arc(-L * 0.05, 0, 2.5, 0, Math.PI * 2);
+          ctx.fill();
+          if (braking) {
+            ctx.fillStyle = '#ff2d2d';
+            ctx.fillRect(-L / 2, -0.9, 1.4, 1.8);
+          }
+        } else if (c.kind === 'truck') {
+          // ciężarówka: naczepa i ciemniejsza kabina z przodu
+          hw = 4.8;
+          const cab = 9;
+          rrect(ctx, -L / 2, -hw, L, hw * 2, 2);
+          ctx.fill();
+          ctx.fillStyle = 'rgba(235,238,242,.55)'; // plandeka naczepy
+          ctx.fillRect(-L / 2 + 1, -hw + 1, L - cab - 2, hw * 2 - 2);
+          ctx.fillStyle = 'rgba(15,25,35,.85)';
+          ctx.fillRect(L / 2 - 4, -hw + 1.4, 2.6, hw * 2 - 2.8);
+          if (braking) {
+            ctx.fillStyle = '#ff2d2d';
+            ctx.fillRect(-L / 2, -hw + 0.6, 1.6, 2);
+            ctx.fillRect(-L / 2, hw - 2.6, 1.6, 2);
+          }
+        } else {
+          rrect(ctx, -L / 2, -4, L, 8, 2.4);
+          ctx.fill();
+          ctx.fillStyle = 'rgba(15,25,35,.78)';
+          ctx.fillRect(L * 0.08, -3.1, L * 0.2, 6.2);
+          ctx.fillRect(-L * 0.38, -3.1, L * 0.13, 6.2);
+          if (braking) {
+            ctx.fillStyle = '#ff2d2d';
+            ctx.fillRect(-L / 2, -3.4, 1.6, 2);
+            ctx.fillRect(-L / 2, 1.4, 1.6, 2);
+          }
         }
         if (c.stillT > 30) {
           ctx.strokeStyle = '#ff2d2d';
           ctx.lineWidth = 1.2;
-          rrect(ctx, -L / 2 - 1, -4.7, L + 2, 9.4, 3);
+          rrect(ctx, -L / 2 - 1, -hw - 0.7, L + 2, hw * 2 + 1.4, 3);
           ctx.stroke();
         }
         ctx.restore();

@@ -18,12 +18,17 @@ Gra ma dwa tryby:
   natężenie ruchu i obserwować statystyki: przepustowość, opóźnienie, płynność, auta w korku.
   Powrót do planowania zeruje symulację, a reguły zostają.
 
+Przycisk **⤢** w rogu mapy (lub klawisz **F**) chowa górne menu i panel boczny / dolny – zostaje sama mapa.
+
 Mapa jest losowana (przycisk **Losuj mapę**); ten sam numer mapy i rozmiar zawsze dają ten sam układ dróg.
 Drogi mają 1–3 pasy w każdym kierunku. Ustawienia zapisują się automatycznie w `localStorage`.
 
 ## Zasady ruchu w symulacji
 
 - Jazda prawostronna, auta wybierają pas pod następny skręt.
+- Rodzaje pojazdów: samochody osobowe (ok. 78% ruchu), **ciężarówki** (13%, dłuższe, ok. 35% wolniejsze od aut, wolno
+  przyspieszają) i **motocykle** (9%, krótkie, ok. 30% szybsze, szybko przyspieszają). Nie ma wyprzedzania – pojazdy
+  jadą za sobą na swoim pasie, więc ciężarówka spowalnia ruch za sobą.
 - Sygnalizacja: po zielonym 3 s żółtego i 1,5 s czerwonego dla wszystkich.
 - Bez sygnalizacji i znaków obowiązuje **zasada prawej ręki**; lewoskręt ustępuje jadącym z przeciwka.
 - **Droga z pierwszeństwem (D-1)** > brak znaku > **ustąp pierwszeństwa (A-7)** / **STOP (B-20)** (pełne zatrzymanie).

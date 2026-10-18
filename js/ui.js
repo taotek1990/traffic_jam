@@ -513,6 +513,7 @@
     $('#btn-plan').addEventListener('click', () => app.mode !== 'plan' && setMode('plan'));
     $('#btn-sim').addEventListener('click', () => app.mode !== 'sim' && setMode('sim'));
     $('#btn-fit').addEventListener('click', () => renderer.fit(app.map));
+    $('#btn-focus').addEventListener('click', toggleFocus);
     $('#btn-new').addEventListener('click', () => {
       const seed = randomSeed();
       setMap(seed, $('#size').value);
@@ -547,8 +548,19 @@
         e.preventDefault();
         togglePlay();
       } else if (e.key === 'Escape') setTool('select');
+      else if (e.key === 'f' || e.key === 'F') toggleFocus();
     });
     window.addEventListener('resize', () => renderer.resize());
+  }
+
+  // widok samej mapy: chowa górne menu i panel boczny / dolny, środek widoku zostaje w tym samym miejscu
+  function toggleFocus() {
+    const c = renderer.toWorld(renderer.w / 2, renderer.h / 2);
+    const on = document.body.classList.toggle('focus');
+    $('#btn-focus').textContent = on ? '✕' : '⤢';
+    renderer.resize();
+    renderer.cam.x = c.x - renderer.w / 2 / renderer.cam.k;
+    renderer.cam.y = c.y - renderer.h / 2 / renderer.cam.k;
   }
 
   function togglePlay() {
