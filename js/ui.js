@@ -218,13 +218,45 @@
 
   function bindCanvas() {
     const cv = renderer.cv;
+    const ptrs = new Map(); // aktywne wskaźniki (dotyk wielopunktowy)
     let drag = null;
+    let pinch = null;
+    const local = (e) => {
+      const r = cv.getBoundingClientRect();
+      return { x: e.clientX - r.left, y: e.clientY - r.top };
+    };
+    const pinchState = () => {
+      const [a, b] = [...ptrs.values()];
+      return { cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2, dist: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)) };
+    };
+    const release = (e) => {
+      ptrs.delete(e.pointerId);
+      if (ptrs.size < 2) pinch = null;
+    };
     cv.addEventListener('contextmenu', (e) => e.preventDefault());
     cv.addEventListener('pointerdown', (e) => {
       try { cv.setPointerCapture(e.pointerId); } catch (err) { /* np. zdarzenia syntetyczne */ }
+      ptrs.set(e.pointerId, local(e));
+      if (ptrs.size >= 2) {
+        // drugi palec: tryb szczypania, bieżące przeciąganie i stuknięcie są anulowane
+        drag = null;
+        app.hoverSlot = null;
+        pinch = pinchState();
+        return;
+      }
+      pinch = null;
       drag = { x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, moved: false, button: e.button };
     });
+    cv.addEventListener('pointercancel', (e) => { release(e); drag = null; });
     cv.addEventListener('pointermove', (e) => {
+      if (ptrs.has(e.pointerId)) ptrs.set(e.pointerId, local(e));
+      if (pinch && ptrs.size >= 2) {
+        const p = pinchState();
+        renderer.pan(p.cx - pinch.cx, p.cy - pinch.cy);
+        renderer.zoomAt(p.cx, p.cy, p.dist / pinch.dist);
+        pinch = p;
+        return;
+      }
       const r = cv.getBoundingClientRect();
       if (drag) {
         if (!drag.moved && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) > 5) drag.moved = true;
@@ -234,11 +266,12 @@
         }
         drag.lx = e.clientX;
         drag.ly = e.clientY;
-      } else if (app.mode === 'plan' && app.tool !== 'select') {
+      } else if (e.pointerType === 'mouse' && app.mode === 'plan' && app.tool !== 'select') {
         app.hoverSlot = findSlot(renderer.toWorld(e.clientX - r.left, e.clientY - r.top));
       }
     });
     cv.addEventListener('pointerup', (e) => {
+      release(e);
       if (!drag) return;
       const d = drag;
       drag = null;
@@ -258,7 +291,7 @@
       }
       select(findNode(w));
     });
-    cv.addEventListener('pointerleave', () => { app.hoverSlot = null; });
+    cv.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') app.hoverSlot = null; });
     cv.addEventListener('wheel', (e) => {
       e.preventDefault();
       const r = cv.getBoundingClientRect();

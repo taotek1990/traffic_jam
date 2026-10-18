@@ -18,6 +18,7 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  touch-action: manipulation;
 }
 button, select, input { font: inherit; color: inherit; }
 button {

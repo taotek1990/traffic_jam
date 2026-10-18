@@ -4,12 +4,14 @@
   const W = TJ.C.LANE_W;
 
   const SIZES = {
-    small: { cols: 4, rows: 3 },
-    medium: { cols: 5, rows: 4 },
-    large: { cols: 6, rows: 5 },
+    // extra – szansa na dodatkowy odcinek ponad drzewo rozpinające (cykle = więcej skrzyżowań),
+    // diag / curve – szansa na skos / łuk, gates – docelowa liczba bram
+    small: { cols: 3, rows: 3, extra: 0.25, diag: 0, curve: 0, gates: 4 },
+    medium: { cols: 5, rows: 4, extra: 0.6, diag: 0.05, curve: 0.07, gates: 9 },
+    large: { cols: 6, rows: 5, extra: 0.7, diag: 0.06, curve: 0.09, gates: 11 },
   };
   TJ.SIZES = SIZES;
-  TJ.MAP_VERSION = 1;
+  TJ.MAP_VERSION = 2;
 
   const LABELS = 'ABCDEFGH';
   const hwOf = (lanes) => lanes * W + 1; // połowa szerokości jezdni jednego kierunku + pół pasa rozdzielającego
@@ -58,8 +60,8 @@
 
   TJ.generateMap = function (seed, sizeKey) {
     const rnd = TJ.rng(seed);
-    const { cols, rows } = SIZES[sizeKey] || SIZES.medium;
-    const SX = 285, SY = 250, JIT = 36, OX = 220, OY = 200;
+    const { cols, rows, extra, diag, curve, gates: wantGates } = SIZES[sizeKey] || SIZES.medium;
+    const SX = 285, SY = 250, JIT = 34, OX = 220, OY = 200;
     const shuffle = (a) => {
       for (let i = a.length - 1; i > 0; i--) {
         const j = Math.floor(rnd() * (i + 1));
@@ -68,7 +70,10 @@
       return a;
     };
 
-    // 1) siatka węzłów z losowym rozrzutem
+    // 1) siatka węzłów; rozrzut jest wspólny dla całego wiersza / kolumny, więc drogi
+    // poziome i pionowe pozostają równoległe i prostopadłe, a zmienia się tylko odstęp między nimi
+    const colOff = Array.from({ length: cols }, () => (rnd() * 2 - 1) * JIT);
+    const rowOff = Array.from({ length: rows }, () => (rnd() * 2 - 1) * JIT);
     const grid = [];
     const pts = [];
     for (let j = 0; j < rows; j++) {
@@ -81,8 +86,8 @@
         if (j === rows - 1) outs.push({ x: 0, y: 1 });
         const p = {
           idx: pts.length,
-          x: OX + i * SX + (rnd() * 2 - 1) * JIT,
-          y: OY + j * SY + (rnd() * 2 - 1) * JIT,
+          x: OX + i * SX + colOff[i],
+          y: OY + j * SY + rowOff[j],
           boundary: outs.length > 0,
           outs,
           alive: true,
@@ -112,7 +117,7 @@
         roads.push(c);
       } else rest.push(c);
     }
-    for (const c of rest) if (rnd() < 0.7) roads.push(c);
+    for (const c of rest) if (rnd() < extra) roads.push(c);
 
     const degOf = (p) => roads.reduce((s, r) => s + (r.a === p || r.b === p ? 1 : 0), 0);
 
@@ -134,7 +139,7 @@
     // 4) pojedyncze skosy
     for (let j = 0; j < rows - 1; j++) {
       for (let i = 0; i < cols - 1; i++) {
-        if (rnd() >= 0.2) continue;
+        if (rnd() >= diag) continue;
         const flip = rnd() < 0.5;
         const a = flip ? grid[j][i + 1] : grid[j][i];
         const b = flip ? grid[j + 1][i] : grid[j + 1][i + 1];
@@ -158,16 +163,14 @@
     // 6) bramy wjazdowe/wyjazdowe na brzegach
     const alive = pts.filter((p) => p.alive);
     let gateCount = alive.filter((p) => degOf(p) === 1).length;
-    const wantGates = cols + rows;
     for (const p of shuffle(alive.filter((p) => p.boundary && degOf(p) >= 2))) {
       if (gateCount >= wantGates) break;
       if (gateCount >= 4 && rnd() > 0.7) continue;
       const o = p.outs[Math.floor(rnd() * p.outs.length)];
-      const perp = (rnd() * 2 - 1) * 20;
       const g = {
         idx: -1,
-        x: p.x + o.x * 150 + -o.y * perp,
-        y: p.y + o.y * 150 + o.x * perp,
+        x: p.x + o.x * 150,
+        y: p.y + o.y * 150,
         alive: true,
         gate: true,
       };
@@ -179,9 +182,9 @@
     const finalRoads = [];
     for (const r of roads) {
       const len = Math.hypot(r.b.x - r.a.x, r.b.y - r.a.y);
-      if ((r.kind === 'h' || r.kind === 'v') && len > 230 && rnd() < 0.3) {
+      if ((r.kind === 'h' || r.kind === 'v') && len > 230 && rnd() < curve) {
         const nx = -(r.b.y - r.a.y) / len, ny = (r.b.x - r.a.x) / len;
-        const off = (20 + rnd() * 22) * (rnd() < 0.5 ? -1 : 1);
+        const off = (16 + rnd() * 14) * (rnd() < 0.5 ? -1 : 1);
         const m = { x: (r.a.x + r.b.x) / 2 + nx * off, y: (r.a.y + r.b.y) / 2 + ny * off };
         finalRoads.push({ a: r.a, b: m, lanes: r.lanes }, { a: m, b: r.b, lanes: r.lanes });
       } else finalRoads.push(r);
