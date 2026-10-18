@@ -129,3 +129,5 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
   #main { flex-direction: column; }
   #side { width: 100%; max-height: 45%; border-left: 0; border-top: 1px solid var(--line); }
 }
+
+#ver { margin-top: 18px; padding-top: 10px; border-top: 1px solid var(--line); color: var(--mute); font-size: 12px; text-align: center; }

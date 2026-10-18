@@ -2,6 +2,8 @@
   'use strict';
   const TJ = (window.TJ = window.TJ || {});
 
+  TJ.VERSION = '1.0.0';
+
   TJ.C = { LANE_W: 12 };
 
   // deterministyczny generator liczb losowych (mulberry32)

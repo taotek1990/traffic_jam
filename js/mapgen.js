@@ -5,13 +5,13 @@
 
   const SIZES = {
     // extra – szansa na dodatkowy odcinek ponad drzewo rozpinające (cykle = więcej skrzyżowań),
-    // diag / curve – szansa na skos / łuk, gates – docelowa liczba bram
-    small: { cols: 3, rows: 3, extra: 0.25, diag: 0, curve: 0, gates: 4 },
-    medium: { cols: 5, rows: 4, extra: 0.6, diag: 0.05, curve: 0.07, gates: 9 },
-    large: { cols: 6, rows: 5, extra: 0.7, diag: 0.06, curve: 0.09, gates: 11 },
+    // trim – szansa na usunięcie brzegowego zakrętu (zamiast dodawać bramę), diag – szansa na skos, gates – docelowa liczba bram
+    small: { cols: 3, rows: 3, extra: 0.25, trim: 0.35, diag: 0, gates: 4 },
+    medium: { cols: 5, rows: 4, extra: 0.6, trim: 0.2, diag: 0.05, gates: 9 },
+    large: { cols: 6, rows: 5, extra: 0.7, trim: 0.2, diag: 0.06, gates: 11 },
   };
   TJ.SIZES = SIZES;
-  TJ.MAP_VERSION = 2;
+  TJ.MAP_VERSION = 3;
 
   const LABELS = 'ABCDEFGH';
   const hwOf = (lanes) => lanes * W + 1; // połowa szerokości jezdni jednego kierunku + pół pasa rozdzielającego
@@ -58,9 +58,9 @@
     return { x: node.x + a.x * (node.R + 4) + arm.in.n.x * off, y: node.y + a.y * (node.R + 4) + arm.in.n.y * off };
   };
 
-  TJ.generateMap = function (seed, sizeKey) {
+  function buildMap(seed, sizeKey) {
     const rnd = TJ.rng(seed);
-    const { cols, rows, extra, diag, curve, gates: wantGates } = SIZES[sizeKey] || SIZES.medium;
+    const { cols, rows, extra, trim, diag, gates: wantGates } = SIZES[sizeKey] || SIZES.medium;
     const SX = 285, SY = 250, JIT = 34, OX = 220, OY = 200;
     const shuffle = (a) => {
       for (let i = a.length - 1; i > 0; i--) {
@@ -86,6 +86,8 @@
         if (j === rows - 1) outs.push({ x: 0, y: 1 });
         const p = {
           idx: pts.length,
+          i,
+          j,
           x: OX + i * SX + colOff[i],
           y: OY + j * SY + rowOff[j],
           boundary: outs.length > 0,
@@ -121,16 +123,74 @@
 
     const degOf = (p) => roads.reduce((s, r) => s + (r.a === p || r.b === p ? 1 : 0), 0);
 
-    // 3) usuń ślepe zaułki wewnątrz mapy
+    // 3) usuń ślepe zaułki wewnątrz mapy oraz węzły z tylko dwiema drogami (skrzyżowanie musi mieć min. 3 ramiona)
+    const kill = (p) => {
+      p.alive = false;
+      roads = roads.filter((r) => r.a !== p && r.b !== p);
+    };
+    const hasRoad = (a, b) => roads.some((r) => (r.a === a && r.b === b) || (r.a === b && r.b === a));
     let changed = true;
     while (changed) {
       changed = false;
       for (const p of pts) {
         if (!p.alive) continue;
-        const d = degOf(p);
-        if (d === 0 || (d === 1 && !p.boundary)) {
-          p.alive = false;
-          roads = roads.filter((r) => r.a !== p && r.b !== p);
+        const mine = roads.filter((r) => r.a === p || r.b === p);
+        if (mine.length === 0 || (mine.length === 1 && !p.boundary)) {
+          kill(p);
+          changed = true;
+        } else if (mine.length === 2) {
+          const [r1, r2] = mine;
+          if (r1.kind === r2.kind) {
+            // dwie drogi w jednej linii: scal je w jedną prostą drogę
+            const u = r1.a === p ? r1.b : r1.a, w = r2.a === p ? r2.b : r2.a;
+            roads = roads.filter((r) => r !== r1 && r !== r2);
+            roads.push({ a: u, b: w, kind: r1.kind, line: r1.line });
+            p.alive = false;
+            changed = true;
+          } else if (!p.boundary) {
+            // zakręt wewnątrz mapy: dołóż drogę do sąsiada albo usuń węzeł
+            const nb = [[-1, 0], [1, 0], [0, -1], [0, 1]]
+              .map(([di, dj]) => (grid[p.j + dj] || [])[p.i + di])
+              .filter((q) => q && q.alive && !hasRoad(p, q));
+            if (nb.length) {
+              const q = nb[Math.floor(rnd() * nb.length)];
+              const horiz = q.j === p.j;
+              const [a, b] = q.i + q.j < p.i + p.j ? [q, p] : [p, q];
+              roads.push({ a, b, kind: horiz ? 'h' : 'v', line: horiz ? p.j : p.i });
+            } else kill(p);
+            changed = true;
+          } else {
+            // brzegowy zakręt: usuń go albo (poniżej) dostanie bramę
+            if (p.trimmed === undefined) p.trimmed = rnd() < trim;
+            if (p.trimmed) {
+              kill(p);
+              changed = true;
+            }
+          }
+        }
+      }
+      if (changed) continue;
+      // zostaw tylko największą spójną część mapy
+      const comp = new Map();
+      let best = null, bestSize = 0;
+      for (const p of pts) {
+        if (!p.alive || comp.has(p)) continue;
+        const members = [p];
+        comp.set(p, members);
+        for (let k = 0; k < members.length; k++) {
+          for (const r of roads) {
+            const q = r.a === members[k] ? r.b : r.b === members[k] ? r.a : null;
+            if (q && !comp.has(q)) {
+              comp.set(q, members);
+              members.push(q);
+            }
+          }
+        }
+        if (members.length > bestSize) { best = members; bestSize = members.length; }
+      }
+      for (const p of pts) {
+        if (p.alive && comp.get(p) !== best) {
+          kill(p);
           changed = true;
         }
       }
@@ -163,9 +223,7 @@
     // 6) bramy wjazdowe/wyjazdowe na brzegach
     const alive = pts.filter((p) => p.alive);
     let gateCount = alive.filter((p) => degOf(p) === 1).length;
-    for (const p of shuffle(alive.filter((p) => p.boundary && degOf(p) >= 2))) {
-      if (gateCount >= wantGates) break;
-      if (gateCount >= 4 && rnd() > 0.7) continue;
+    const addGate = (p) => {
       const o = p.outs[Math.floor(rnd() * p.outs.length)];
       const g = {
         idx: -1,
@@ -175,20 +233,17 @@
         gate: true,
       };
       roads.push({ a: p, b: g, kind: 'g', lanes: rnd() < 0.6 ? 1 : 2 });
+    };
+    for (const p of shuffle(alive.filter((p) => p.boundary && degOf(p) >= 2))) {
+      if (gateCount >= wantGates) break;
+      if (gateCount >= 4 && rnd() > 0.7) continue;
+      addGate(p);
       gateCount++;
     }
+    // brzegowy zakręt z dwiema drogami też dostaje bramę, żeby powstało pełne skrzyżowanie
+    for (const p of alive.filter((p) => p.boundary && degOf(p) === 2)) addGate(p);
 
-    // 7) łagodne łuki na dłuższych odcinkach
-    const finalRoads = [];
-    for (const r of roads) {
-      const len = Math.hypot(r.b.x - r.a.x, r.b.y - r.a.y);
-      if ((r.kind === 'h' || r.kind === 'v') && len > 230 && rnd() < curve) {
-        const nx = -(r.b.y - r.a.y) / len, ny = (r.b.x - r.a.x) / len;
-        const off = (16 + rnd() * 14) * (rnd() < 0.5 ? -1 : 1);
-        const m = { x: (r.a.x + r.b.x) / 2 + nx * off, y: (r.a.y + r.b.y) / 2 + ny * off };
-        finalRoads.push({ a: r.a, b: m, lanes: r.lanes }, { a: m, b: r.b, lanes: r.lanes });
-      } else finalRoads.push(r);
-    }
+    const finalRoads = roads;
 
     // 8) obiekty mapy
     const nodes = [];
@@ -293,6 +348,20 @@
       bounds: { x0: minX - 110, y0: minY - 110, x1: maxX + 110, y1: maxY + 110 },
       mvCache: new Map(),
     };
+  }
+
+  // Usuwanie zakrętów potrafi mocno okroić małą mapę – wtedy losujemy ponownie (z ziarna pochodnego,
+  // więc ten sam numer mapy nadal daje ten sam wynik).
+  const MIN_JUNCTIONS = { small: 2, medium: 5, large: 8 };
+  TJ.generateMap = function (seed, sizeKey) {
+    const key = SIZES[sizeKey] ? sizeKey : 'medium';
+    let map = null;
+    for (let attempt = 0; attempt < 30; attempt++) {
+      map = buildMap((seed + attempt * 7919) >>> 0, key);
+      if (map.gates.length >= 3 && map.junctions.length >= MIN_JUNCTIONS[key]) break;
+    }
+    map.seed = seed;
+    return map;
   };
 
   // Tor przejazdu przez skrzyżowanie: z pasa i krawędzi e1 na pas j krawędzi e2 (krzywa Béziera)

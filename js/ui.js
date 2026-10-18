@@ -605,6 +605,7 @@
   // ------------------------------------------------------------ start
   function init() {
     buildTools();
+    $('#ver').textContent = 'Zielona Fala v' + TJ.VERSION;
     buildStats();
     bindCanvas();
     bindInspector();
