@@ -55,7 +55,7 @@
 
     zoomAt(sx, sy, f) {
       const w = this.toWorld(sx, sy);
-      const k = TJ.clamp(this.cam.k * f, 0.25, 4);
+      const k = TJ.clamp(this.cam.k * f, 0.1, 4);
       this.cam.k = k;
       this.cam.x = w.x - sx / k;
       this.cam.y = w.y - sy / k;
