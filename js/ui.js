@@ -218,67 +218,34 @@
 
   function bindCanvas() {
     const cv = renderer.cv;
-    const ptrs = new Map(); // aktywne wskaźniki (dotyk wielopunktowy)
     let drag = null;
     let pinch = null;
-    const local = (e) => {
+    const local = (x, y) => {
       const r = cv.getBoundingClientRect();
-      return { x: e.clientX - r.left, y: e.clientY - r.top };
+      return { x: x - r.left, y: y - r.top };
     };
-    const pinchState = () => {
-      const [a, b] = [...ptrs.values()];
-      return { cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2, dist: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)) };
-    };
-    const release = (e) => {
-      ptrs.delete(e.pointerId);
-      if (ptrs.size < 2) pinch = null;
-    };
-    cv.addEventListener('contextmenu', (e) => e.preventDefault());
-    cv.addEventListener('pointerdown', (e) => {
-      try { cv.setPointerCapture(e.pointerId); } catch (err) { /* np. zdarzenia syntetyczne */ }
-      ptrs.set(e.pointerId, local(e));
-      if (ptrs.size >= 2) {
-        // drugi palec: tryb szczypania, bieżące przeciąganie i stuknięcie są anulowane
-        drag = null;
-        app.hoverSlot = null;
-        pinch = pinchState();
-        return;
+
+    function dragStart(x, y, button) {
+      drag = { x, y, lx: x, ly: y, moved: false, button };
+    }
+    function dragMove(x, y) {
+      if (!drag) return;
+      if (!drag.moved && Math.hypot(x - drag.x, y - drag.y) > 5) drag.moved = true;
+      if (drag.moved) {
+        renderer.pan(x - drag.lx, y - drag.ly);
+        cv.style.cursor = 'grabbing';
       }
-      pinch = null;
-      drag = { x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, moved: false, button: e.button };
-    });
-    cv.addEventListener('pointercancel', (e) => { release(e); drag = null; });
-    cv.addEventListener('pointermove', (e) => {
-      if (ptrs.has(e.pointerId)) ptrs.set(e.pointerId, local(e));
-      if (pinch && ptrs.size >= 2) {
-        const p = pinchState();
-        renderer.pan(p.cx - pinch.cx, p.cy - pinch.cy);
-        renderer.zoomAt(p.cx, p.cy, p.dist / pinch.dist);
-        pinch = p;
-        return;
-      }
-      const r = cv.getBoundingClientRect();
-      if (drag) {
-        if (!drag.moved && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) > 5) drag.moved = true;
-        if (drag.moved) {
-          renderer.pan(e.clientX - drag.lx, e.clientY - drag.ly);
-          cv.style.cursor = 'grabbing';
-        }
-        drag.lx = e.clientX;
-        drag.ly = e.clientY;
-      } else if (e.pointerType === 'mouse' && app.mode === 'plan' && app.tool !== 'select') {
-        app.hoverSlot = findSlot(renderer.toWorld(e.clientX - r.left, e.clientY - r.top));
-      }
-    });
-    cv.addEventListener('pointerup', (e) => {
-      release(e);
+      drag.lx = x;
+      drag.ly = y;
+    }
+    function dragEnd(x, y) {
       if (!drag) return;
       const d = drag;
       drag = null;
       cv.style.cursor = app.tool === 'select' ? '' : 'crosshair';
       if (d.moved) return;
-      const r = cv.getBoundingClientRect();
-      const w = renderer.toWorld(e.clientX - r.left, e.clientY - r.top);
+      const p = local(x, y);
+      const w = renderer.toWorld(p.x, p.y);
       if (app.mode === 'plan' && d.button === 2) {
         const s = findSlot(w, true);
         if (s) clearSlot(s);
@@ -290,12 +257,74 @@
         if (s) return applyTool(s);
       }
       select(findNode(w));
+    }
+
+    cv.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    // mysz i rysik – zdarzenia wskaźnika
+    cv.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'touch') return;
+      try { cv.setPointerCapture(e.pointerId); } catch (err) { /* np. zdarzenia syntetyczne */ }
+      dragStart(e.clientX, e.clientY, e.button);
+    });
+    cv.addEventListener('pointermove', (e) => {
+      if (e.pointerType === 'touch') return;
+      if (drag) return dragMove(e.clientX, e.clientY);
+      if (app.mode === 'plan' && app.tool !== 'select') {
+        const p = local(e.clientX, e.clientY);
+        app.hoverSlot = findSlot(renderer.toWorld(p.x, p.y));
+      }
+    });
+    cv.addEventListener('pointerup', (e) => {
+      if (e.pointerType !== 'touch') dragEnd(e.clientX, e.clientY);
+    });
+    cv.addEventListener('pointercancel', (e) => {
+      if (e.pointerType !== 'touch') drag = null;
     });
     cv.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') app.hoverSlot = null; });
+
+    // dotyk – zdarzenia dotyku (Firefox mobilny sam przejmuje szczypanie ze zdarzeń wskaźnika)
+    const pinchState = (t) => {
+      const a = local(t[0].clientX, t[0].clientY), b = local(t[1].clientX, t[1].clientY);
+      return { cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2, dist: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)) };
+    };
+    cv.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      app.hoverSlot = null;
+      if (e.touches.length >= 2) {
+        // drugi palec: tryb szczypania, bieżące przeciąganie i stuknięcie są anulowane
+        drag = null;
+        pinch = pinchState(e.touches);
+      } else {
+        pinch = null;
+        dragStart(e.touches[0].clientX, e.touches[0].clientY, 0);
+      }
+    }, { passive: false });
+    cv.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      if (e.touches.length >= 2) {
+        const p = pinchState(e.touches);
+        if (pinch) {
+          renderer.pan(p.cx - pinch.cx, p.cy - pinch.cy);
+          renderer.zoomAt(p.cx, p.cy, p.dist / pinch.dist);
+        }
+        pinch = p;
+      } else if (e.touches.length === 1) {
+        dragMove(e.touches[0].clientX, e.touches[0].clientY);
+      }
+    }, { passive: false });
+    cv.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      if (e.touches.length < 2) pinch = null;
+      const t = e.changedTouches[0];
+      if (e.touches.length === 0 && t) dragEnd(t.clientX, t.clientY);
+    }, { passive: false });
+    cv.addEventListener('touchcancel', () => { drag = null; pinch = null; });
+
     cv.addEventListener('wheel', (e) => {
       e.preventDefault();
-      const r = cv.getBoundingClientRect();
-      renderer.zoomAt(e.clientX - r.left, e.clientY - r.top, e.deltaY < 0 ? 1.12 : 1 / 1.12);
+      const p = local(e.clientX, e.clientY);
+      renderer.zoomAt(p.x, p.y, e.deltaY < 0 ? 1.12 : 1 / 1.12);
     }, { passive: false });
   }
 
